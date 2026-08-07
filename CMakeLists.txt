@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 # include(FetchContent)
 
-project(Tokri VERSION 0.1 LANGUAGES CXX)
+project(Tokri VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -116,8 +116,7 @@ set_target_properties(Tokri PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER "net.surajyadav.Tokri"
     MACOSX_BUNDLE_BUNDLE_NAME "Tokri"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING
-        "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     WIN32_EXECUTABLE TRUE
 )
 
@@ -145,6 +144,18 @@ target_link_libraries(Tokri PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
 target_include_directories(Tokri PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(horizontalshakedetector_test
+        tests/horizontalshakedetector_test.cpp
+        src/horizontalshakedetector.cpp
+    )
+    target_include_directories(horizontalshakedetector_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME horizontalshakedetector COMMAND horizontalshakedetector_test)
+endif()
 
 if(UNIX AND NOT APPLE)
         install(

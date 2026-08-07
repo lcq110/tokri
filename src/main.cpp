@@ -41,6 +41,7 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <QAction>
+#include <QDebug>
 #include <QTimer>
 
 int main(int argc, char *argv[])
@@ -91,7 +92,8 @@ int main(int argc, char *argv[])
 
     QObject::connect(tray, &QSystemTrayIcon::activated,
                      [&](QSystemTrayIcon::ActivationReason r) {
-                         if (r == QSystemTrayIcon::DoubleClick)
+                         if (r == QSystemTrayIcon::Trigger ||
+                             r == QSystemTrayIcon::DoubleClick)
                              tokriWindow.wakeUp();
                      });
 
@@ -114,6 +116,14 @@ int main(int argc, char *argv[])
 
     tokriWindow.uiHandle()->listView->setModel(sortFilterProxy);
     tokriWindow.uiHandle()->listView->setRootIndex(sortFilterProxy->mapFromSource(rootIndex));
+
+    QObject::connect(sortFilterProxy, &QAbstractItemModel::rowsRemoved,
+                     &tokriWindow,
+                     [&tokriWindow, sortFilterProxy] {
+                         auto *listView = tokriWindow.uiHandle()->listView;
+                         if (sortFilterProxy->rowCount(listView->rootIndex()) == 0)
+                             tokriWindow.sleep();
+                     });
 
     TextDropHandler *dropHandler = new TextDropHandler;
     DropAwareFileSystemModel::connect(
@@ -259,7 +269,18 @@ int main(int argc, char *argv[])
         &TokriWindow::wakeUp
         );
 
-    interceptor->start();
+    if (interceptor->start()) {
+        qInfo() << "Input Monitoring is active";
+    } else {
+        qWarning() << "Input Monitoring is unavailable";
+        tray->setToolTip("Tokri - Input Monitoring permission required");
+        tray->showMessage(
+            "Tokri needs Input Monitoring",
+            "Enable Tokri in Privacy & Security, then restart the app.",
+            QSystemTrayIcon::Warning,
+            8000
+            );
+    }
 #endif
 
 

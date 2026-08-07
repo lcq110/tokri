@@ -45,6 +45,8 @@
 > Or allow it via:
 > **System Settings → Privacy & Security → Open Anyway**
 
+Tokri also needs **Input Monitoring** permission on macOS to detect the drag-and-shake gesture. After granting it, quit and reopen Tokri. While holding an item, move the pointer left, right, and left again. You can always show the basket by single-clicking the Tokri menu bar icon.
+
 ### Linux
 - Flatpak bundle: [Tokri.flatpak](https://github.com/jarusll/tokri/releases/download/v2026.03.01/Tokri.flatpak)
 

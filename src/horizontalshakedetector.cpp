@@ -1,54 +1,47 @@
 #include "horizontalshakedetector.h"
 
-HorizontalShakeDetector::HorizontalShakeDetector(QObject *parent)
-    : QObject{parent}
-{}
+#include <cstdlib>
 
 bool HorizontalShakeDetector::feed(int dx, uint64_t tsMs)
 {
-    // jitter
-    if (std::abs(dx) < minDx)
-        return false;
-
-    // finger lifted / teleported on touchpad
-    if (std::abs(dx) > maxDx) {
-        return false;
-    }
-
     if (dx == 0)
         return false;
 
-    int dir = (dx > 0) ? +1 : -1;
+    if (lastDir != 0 && tsMs - lastTsMs > maxGapMs)
+        reset();
 
-    // first movement or too slow → reset sequence
-    if (lastDir == 0 || tsMs - lastTsMs > maxGapMs) {
-        lastDir   = dir;
-        flips     = 0;
-        lastTsMs  = tsMs;
+    lastTsMs = tsMs;
+    const int dir = dx > 0 ? 1 : -1;
+
+    if (lastDir == 0) {
+        lastDir = dir;
+        strokeDistance = std::abs(dx);
         return false;
     }
 
-    // direction changed?
-    if (dir != lastDir) {
-        ++flips;
-        lastDir   = dir;
-        lastTsMs  = tsMs;
-
-        if (flips >= flipThreshold) {
-            reset();
-            return true;
-        }
-    } else {
-        // same direction, just refresh time
-        lastTsMs = tsMs;
+    if (dir == lastDir) {
+        strokeDistance += std::abs(dx);
+        return false;
     }
 
-    return false;
+    if (strokeDistance < minStrokeDistance)
+        return false;
+
+    ++flips;
+    lastDir = dir;
+    strokeDistance = std::abs(dx);
+
+    if (flips < flipThreshold)
+        return false;
+
+    reset();
+    return true;
 }
 
 void HorizontalShakeDetector::reset()
 {
-    lastDir  = 0;
-    flips    = 0;
+    lastDir = 0;
+    strokeDistance = 0;
+    flips = 0;
     lastTsMs = 0;
 }

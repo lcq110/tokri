@@ -10,6 +10,13 @@ CGEventRef MacOSMouseInterceptor::callback(CGEventTapProxy,
                                            CGEventRef event,
                                            void *userInfo) {
     auto *self = static_cast<MacOSMouseInterceptor *>(userInfo);
+
+    if (type == kCGEventTapDisabledByTimeout ||
+        type == kCGEventTapDisabledByUserInput) {
+        CGEventTapEnable(self->eventTap, true);
+        return event;
+    }
+
     self->handleEvent(type, event);
     return event;
 }
@@ -22,10 +29,11 @@ MacOSMouseInterceptor::~MacOSMouseInterceptor() {
 }
 
 bool MacOSMouseInterceptor::start() {
+    if (!CGPreflightListenEventAccess() && !CGRequestListenEventAccess())
+        return false;
+
     CGEventMask mask =
-        CGEventMaskBit(kCGEventMouseMoved) |
-                       CGEventMaskBit(kCGEventLeftMouseDragged) |
-                       CGEventMaskBit(kCGEventRightMouseDragged) |
+        CGEventMaskBit(kCGEventLeftMouseDragged) |
                        CGEventMaskBit(kCGEventLeftMouseDown) |
                        CGEventMaskBit(kCGEventLeftMouseUp);
 
@@ -66,6 +74,9 @@ void MacOSMouseInterceptor::stop() {
 void MacOSMouseInterceptor::handleEvent(CGEventType type, CGEventRef event) {
     if (type == kCGEventLeftMouseDown) {
         mLeftButtonClicked = true;
+        mShakeDetector.reset();
+        mLastAbsoluteX = CGEventGetLocation(event).x;
+        mHaveLastAbsoluteX = true;
         return;
     }
     if (type == kCGEventLeftMouseUp) {
@@ -75,13 +86,14 @@ void MacOSMouseInterceptor::handleEvent(CGEventType type, CGEventRef event) {
         return;
     }
 
-    if (!mLeftButtonClicked)
+    if (type != kCGEventLeftMouseDragged)
         return;
 
-    if (type != kCGEventMouseMoved &&
-        type != kCGEventLeftMouseDragged &&
-        type != kCGEventRightMouseDragged)
-        return;
+    if (!mLeftButtonClicked) {
+        mLeftButtonClicked = true;
+        mShakeDetector.reset();
+        mHaveLastAbsoluteX = false;
+    }
 
     CGPoint p = CGEventGetLocation(event);
 
