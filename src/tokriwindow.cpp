@@ -6,13 +6,14 @@
 #include "sleekscrollbar.h"
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QDesktopServices>
 #include <QDir>
-#include <QEnterEvent>
 #include <QFileSystemModel>
 #include <QMenu>
 #include <QPropertyAnimation>
 #include <QScreen>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -38,6 +39,11 @@ TokriWindow::TokriWindow(QWidget *parent)
     mDockAnimation = new QPropertyAnimation(this, "pos", this);
     mDockAnimation->setDuration(180);
     mDockAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
+    mEdgeHoverTimer = new QTimer(this);
+    mEdgeHoverTimer->setInterval(50);
+    connect(mEdgeHoverTimer, &QTimer::timeout,
+            this, &TokriWindow::updateEdgeHover);
 
     connect(qApp, &QGuiApplication::applicationStateChanged,
             this, [this](Qt::ApplicationState state) {
@@ -196,6 +202,7 @@ Ui::TokriWindow *TokriWindow::uiHandle()
 void TokriWindow::sleep()
 {
     mDockAnimation->stop();
+    mEdgeHoverTimer->stop();
     mDockedAtEdge = false;
     mEdgeHidden = false;
     hide();
@@ -203,17 +210,17 @@ void TokriWindow::sleep()
 
 void TokriWindow::wakeUp()
 {
-    if (mDockedAtEdge) {
-        mDockedAtEdge = false;
-        moveToScreenEdge(false, false);
-    }
-
+    const bool docked = mDockedAtEdge;
     const bool minimized = isMinimized();
     const bool hidden = !isVisible();
 
-    if (minimized || hidden) {
+    mDockAnimation->stop();
+    mEdgeHoverTimer->stop();
+    mDockedAtEdge = false;
+    mEdgeHidden = false;
+
+    if (docked || minimized || hidden)
         moveNearCursor();
-    }
 
     if (minimized) {
         showNormal();
@@ -387,24 +394,19 @@ void TokriWindow::showEvent(QShowEvent *e)
 #endif
 }
 
-void TokriWindow::enterEvent(QEnterEvent *event)
+void TokriWindow::updateEdgeHover()
 {
-    QMainWindow::enterEvent(event);
-    if (mDockedAtEdge && mEdgeHidden)
+    if (!mDockedAtEdge || !isVisible() ||
+        mDockAnimation->state() != QAbstractAnimation::Stopped)
+        return;
+
+    const bool cursorOverWindow = frameGeometry().contains(QCursor::pos());
+    if (mEdgeHidden && cursorOverWindow) {
         revealFromScreenEdge();
-}
-
-void TokriWindow::leaveEvent(QEvent *event)
-{
-    QMainWindow::leaveEvent(event);
-    if (mDockedAtEdge && qApp->applicationState() != Qt::ApplicationActive)
+    } else if (!mEdgeHidden && !cursorOverWindow &&
+               qApp->applicationState() != Qt::ApplicationActive) {
         dockAtScreenEdge();
-}
-
-bool TokriWindow::basketHasItems() const
-{
-    auto *model = ui->listView->model();
-    return model && model->rowCount(ui->listView->rootIndex()) > 0;
+    }
 }
 
 QPoint TokriWindow::screenEdgePosition(bool hidden) const
@@ -443,10 +445,11 @@ void TokriWindow::moveToScreenEdge(bool hidden, bool animated)
 
 void TokriWindow::dockAtScreenEdge()
 {
-    if (!isVisible() || !basketHasItems())
+    if (!isVisible())
         return;
 
     mDockedAtEdge = true;
+    mEdgeHoverTimer->start();
     moveToScreenEdge(true, true);
 }
 

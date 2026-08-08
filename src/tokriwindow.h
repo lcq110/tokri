@@ -10,8 +10,8 @@
 #include <QMimeData>
 #include <QPainter>
 
-class QEnterEvent;
 class QPropertyAnimation;
+class QTimer;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -47,6 +47,7 @@ private:
     bool mEdgeHidden = false;
     CloseButton *mCloseButton;
     QPropertyAnimation *mDockAnimation;
+    QTimer *mEdgeHoverTimer;
 
     void init();
     void moveNearCursor();
@@ -56,9 +57,7 @@ private:
     void showEvent(QShowEvent *e) override;
     void openItem(QString filePath);
     void renderCloseButton();
-    void enterEvent(QEnterEvent *event) override;
-    void leaveEvent(QEvent *event) override;
-    bool basketHasItems() const;
+    void updateEdgeHover();
     QPoint screenEdgePosition(bool hidden) const;
     void moveToScreenEdge(bool hidden, bool animated);
     void dockAtScreenEdge();
