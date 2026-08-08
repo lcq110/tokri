@@ -3,19 +3,23 @@
 #include "standardpaths.h"
 #include "listitemdelegate.h"
 #include "closebutton.h"
-#include <QDir>
-#include <QMenu>
-#include <QDesktopServices>
-#include <QFileSystemModel>
+#include "sleekscrollbar.h"
 #include <QApplication>
 #include <QClipboard>
-#include "sleekscrollbar.h"
+#include <QDesktopServices>
+#include <QDir>
+#include <QEnterEvent>
+#include <QFileSystemModel>
+#include <QMenu>
+#include <QPropertyAnimation>
+#include <QScreen>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
 
 #ifdef Q_OS_MAC
+#include "MacQuickLook.h"
 #include "MacWindowLevel.h"
 #endif
 
@@ -30,6 +34,20 @@ TokriWindow::TokriWindow(QWidget *parent)
                    | Qt::FramelessWindowHint
                    | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground);
+
+    mDockAnimation = new QPropertyAnimation(this, "pos", this);
+    mDockAnimation->setDuration(180);
+    mDockAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
+    connect(qApp, &QGuiApplication::applicationStateChanged,
+            this, [this](Qt::ApplicationState state) {
+                if (state == Qt::ApplicationInactive) {
+                    dockAtScreenEdge();
+                } else if (state == Qt::ApplicationActive && mDockedAtEdge) {
+                    revealFromScreenEdge();
+                    mDockedAtEdge = false;
+                }
+            });
 
     ui->listView->setStyleSheet(R"(
         QListView {
@@ -100,6 +118,8 @@ TokriWindow::TokriWindow(QWidget *parent)
                     copy = menu.addAction("&Copy");
                     del  = menu.addAction("&Delete");
                 }
+                QAction *undoDelete = menu.addAction("&Undo Delete");
+                undoDelete->setEnabled(canUndoDelete());
                 selectAll = menu.addAction("Select &All");
 
                 QAction *chosen = menu.exec(view->viewport()->mapToGlobal(pos));
@@ -147,15 +167,12 @@ TokriWindow::TokriWindow(QWidget *parent)
                 }
 
                 if (chosen == del) {
-                    for (const auto &idx : selected) {
-                        QFileInfo fi(fileInfoAt(idx).filePath());
-                        if (!fi.exists())
-                            return;
+                    deleteSelectedItems();
+                    return;
+                }
 
-                        if (fi.isDir())
-                            QDir(fi.absoluteFilePath()).removeRecursively();
-                        else
-                            QFile::remove(fi.absoluteFilePath());                    }
+                if (chosen == undoDelete) {
+                    undoLastDelete();
                 }
             });
 
@@ -179,11 +196,19 @@ Ui::TokriWindow *TokriWindow::uiHandle()
 
 void TokriWindow::sleep()
 {
+    mDockAnimation->stop();
+    mDockedAtEdge = false;
+    mEdgeHidden = false;
     hide();
 }
 
 void TokriWindow::wakeUp()
 {
+    if (mDockedAtEdge) {
+        mDockedAtEdge = false;
+        moveToScreenEdge(false, false);
+    }
+
     const bool minimized = isMinimized();
     const bool hidden = !isVisible();
 
@@ -283,6 +308,77 @@ void TokriWindow::onShakeDetect()
     wakeUp();
 }
 
+void TokriWindow::previewSelectedItem()
+{
+#ifdef Q_OS_MAC
+    const auto selected = ui->listView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty())
+        return;
+
+    const QModelIndex current = ui->listView->currentIndex();
+    const QModelIndex index = selected.contains(current) ? current : selected.first();
+    const QString filePath = index.data(QFileSystemModel::FileInfoRole)
+                                 .value<QFileInfo>()
+                                 .filePath();
+    MacQuickLook::toggle(filePath);
+#endif
+}
+
+void TokriWindow::deleteSelectedItems()
+{
+    QFileInfoList items;
+    for (const QModelIndex &index : ui->listView->selectionModel()->selectedIndexes()) {
+        const QFileInfo item = index.data(QFileSystemModel::FileInfoRole)
+                                   .value<QFileInfo>();
+        if (item.exists())
+            items.append(item);
+    }
+
+    if (items.isEmpty())
+        return;
+
+    const QString undoPath = StandardPaths::getPath(StandardPaths::UndoDir);
+    QDir(undoPath).removeRecursively();
+    QDir().mkpath(undoPath);
+
+    for (const QFileInfo &item : items) {
+        const QString destination = QDir(undoPath).filePath(item.fileName());
+        if (item.isDir())
+            QDir().rename(item.absoluteFilePath(), destination);
+        else
+            QFile::rename(item.absoluteFilePath(), destination);
+    }
+
+    emit undoDeleteAvailabilityChanged(canUndoDelete());
+}
+
+void TokriWindow::undoLastDelete()
+{
+    const QString undoPath = StandardPaths::getPath(StandardPaths::UndoDir);
+    QDir undoDir(undoPath);
+    const QFileInfoList items = undoDir.entryInfoList(
+        QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+    const QString basketPath = StandardPaths::getPath(StandardPaths::TokriDir);
+
+    for (const QFileInfo &item : items) {
+        const QString destination = QDir(basketPath).filePath(item.fileName());
+        if (item.isDir())
+            QDir().rename(item.absoluteFilePath(), destination);
+        else
+            QFile::rename(item.absoluteFilePath(), destination);
+    }
+
+    emit undoDeleteAvailabilityChanged(canUndoDelete());
+}
+
+bool TokriWindow::canUndoDelete() const
+{
+    const QDir undoDir(StandardPaths::getPath(StandardPaths::UndoDir));
+    return !undoDir.entryList(
+        QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System
+        ).isEmpty();
+}
+
 
 void TokriWindow::showEvent(QShowEvent *e)
 {
@@ -290,6 +386,74 @@ void TokriWindow::showEvent(QShowEvent *e)
 #ifdef Q_OS_MAC
     MacWindowLevel::makeAlwaysOnTop(windowHandle());
 #endif
+}
+
+void TokriWindow::enterEvent(QEnterEvent *event)
+{
+    QMainWindow::enterEvent(event);
+    if (mDockedAtEdge && mEdgeHidden)
+        revealFromScreenEdge();
+}
+
+void TokriWindow::leaveEvent(QEvent *event)
+{
+    QMainWindow::leaveEvent(event);
+    if (mDockedAtEdge && qApp->applicationState() != Qt::ApplicationActive)
+        dockAtScreenEdge();
+}
+
+bool TokriWindow::basketHasItems() const
+{
+    auto *model = ui->listView->model();
+    return model && model->rowCount(ui->listView->rootIndex()) > 0;
+}
+
+QPoint TokriWindow::screenEdgePosition(bool hidden) const
+{
+    QScreen *rightmostScreen = QGuiApplication::primaryScreen();
+    for (QScreen *screen : QGuiApplication::screens()) {
+        if (screen->geometry().right() > rightmostScreen->geometry().right())
+            rightmostScreen = screen;
+    }
+
+    const QRect available = rightmostScreen->availableGeometry();
+    const int y = qBound(available.top(), pos().y(),
+                         available.bottom() - height() + 1);
+    const int edgeHandleWidth = 14;
+    const int x = hidden
+        ? available.right() - edgeHandleWidth + 1
+        : available.right() - width() + 1;
+    return {x, y};
+}
+
+void TokriWindow::moveToScreenEdge(bool hidden, bool animated)
+{
+    const QPoint destination = screenEdgePosition(hidden);
+    mDockAnimation->stop();
+    mEdgeHidden = hidden;
+
+    if (!animated) {
+        move(destination);
+        return;
+    }
+
+    mDockAnimation->setStartValue(pos());
+    mDockAnimation->setEndValue(destination);
+    mDockAnimation->start();
+}
+
+void TokriWindow::dockAtScreenEdge()
+{
+    if (!isVisible() || !basketHasItems())
+        return;
+
+    mDockedAtEdge = true;
+    moveToScreenEdge(true, true);
+}
+
+void TokriWindow::revealFromScreenEdge()
+{
+    moveToScreenEdge(false, true);
 }
 
 void TokriWindow::openItem(QString filePath) {

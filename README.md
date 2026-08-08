@@ -7,6 +7,9 @@
 - Shake while dragging to open the basket and drop items inside.
 - Drag items **out** to move them
 - Hold Ctrl (Windows/Linux) or ⌘ Command (macOS) while dragging to copy
+- Press Space on macOS to preview the selected item with Quick Look.
+- A non-empty basket tucks into the right edge when inactive; hover the strip to reveal it.
+- Restore the last deleted item or selection with Ctrl+Z (Windows/Linux) or ⌘Z (macOS).
 
 ## Images
 ![](./assets/image.gif)

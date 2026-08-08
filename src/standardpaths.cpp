@@ -21,6 +21,9 @@ QString StandardPaths::getPath(Paths path)
     case TokriDir:
         return ensure(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
             + "/" + StandardNames::get(StandardNames::Directory));
+    case UndoDir:
+        return ensure(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+            + "/undo-delete");
     case LinuxApplicationDir:
         return ensure(QStandardPaths::writableLocation(
             QStandardPaths::ApplicationsLocation

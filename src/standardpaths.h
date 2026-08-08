@@ -8,6 +8,7 @@ class StandardPaths
 public:
     enum Paths {
         TokriDir,
+        UndoDir,
         LinuxApplicationDir,
         LinuxIconsDir
     };
