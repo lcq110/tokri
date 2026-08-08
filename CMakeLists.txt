@@ -111,6 +111,11 @@ if(APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/resources/Tokri.icns
         PROPERTIES MACOSX_PACKAGE_LOCATION Resources
     )
+
+    set_target_properties(Tokri PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
+    )
 endif()
 
 set_target_properties(Tokri PROPERTIES
