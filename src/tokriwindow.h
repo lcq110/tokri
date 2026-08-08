@@ -33,6 +33,8 @@ public:
 
 public slots:
     void onShakeDetect();
+    void beginDragWake();
+    void endDragWake();
     void previewSelectedItem();
     void deleteSelectedItems();
     void undoLastDelete();
@@ -45,9 +47,11 @@ private:
     bool mDropping = false;
     bool mDockedAtEdge = false;
     bool mEdgeHidden = false;
+    bool mDragWakeActive = false;
     CloseButton *mCloseButton;
     QPropertyAnimation *mDockAnimation;
     QTimer *mEdgeHoverTimer;
+    QTimer *mEdgeHideTimer;
 
     void init();
     void moveNearCursor();

@@ -29,3 +29,8 @@ void MacWindowLevel::hideFromDock()
     }
     [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 }
+
+void MacWindowLevel::activateApplication()
+{
+    [NSApp activateIgnoringOtherApps:YES];
+}

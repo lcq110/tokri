@@ -2,8 +2,9 @@
 #define MACOSMOUSEINTERCEPTOR_H
 
 #include <QObject>
-#include <CoreGraphics/CoreGraphics.h>
 #include "horizontalshakedetector.h"
+
+class QTimer;
 
 class MacOSMouseInterceptor : public QObject {
     Q_OBJECT
@@ -16,21 +17,14 @@ public:
 
 signals:
     void shakeDetected();
+    void shakeEnded();
 
 private:
-    static CGEventRef callback(CGEventTapProxy,
-                               CGEventType,
-                               CGEventRef,
-                               void *userInfo);
+    void sampleMouse();
 
-    void handleEvent(CGEventType type, CGEventRef event);
-
-    CFMachPortRef eventTap = nullptr;
-    CFRunLoopSourceRef runLoopSource = nullptr;
-
-    bool mLeftButtonClicked = false;
-
-    bool mHaveLastAbsoluteX = false;
+    QTimer *mTimer;
+    bool mLeftButtonPressed = false;
+    bool mShakeDetected = false;
     double mLastAbsoluteX = 0.0;
 
     HorizontalShakeDetector mShakeDetector;

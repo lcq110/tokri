@@ -45,10 +45,22 @@ TokriWindow::TokriWindow(QWidget *parent)
     connect(mEdgeHoverTimer, &QTimer::timeout,
             this, &TokriWindow::updateEdgeHover);
 
+    mEdgeHideTimer = new QTimer(this);
+    mEdgeHideTimer->setInterval(700);
+    mEdgeHideTimer->setSingleShot(true);
+    connect(mEdgeHideTimer, &QTimer::timeout, this, [this] {
+        if (mDockedAtEdge && !mEdgeHidden &&
+            qApp->applicationState() != Qt::ApplicationActive &&
+            !frameGeometry().contains(QCursor::pos())) {
+            moveToScreenEdge(true, true);
+        }
+    });
+
     connect(qApp, &QGuiApplication::applicationStateChanged,
             this, [this](Qt::ApplicationState state) {
                 if (state == Qt::ApplicationInactive) {
-                    dockAtScreenEdge();
+                    if (!mDragWakeActive)
+                        dockAtScreenEdge();
                 } else if (state == Qt::ApplicationActive) {
                     wakeUp();
                 }
@@ -203,8 +215,10 @@ void TokriWindow::sleep()
 {
     mDockAnimation->stop();
     mEdgeHoverTimer->stop();
+    mEdgeHideTimer->stop();
     mDockedAtEdge = false;
     mEdgeHidden = false;
+    mDragWakeActive = false;
     hide();
 }
 
@@ -216,6 +230,7 @@ void TokriWindow::wakeUp()
 
     mDockAnimation->stop();
     mEdgeHoverTimer->stop();
+    mEdgeHideTimer->stop();
     mDockedAtEdge = false;
     mEdgeHidden = false;
 
@@ -228,6 +243,9 @@ void TokriWindow::wakeUp()
         show();
     }
 
+#ifdef Q_OS_MAC
+    MacWindowLevel::activateApplication();
+#endif
     raise();
     activateWindow();
 }
@@ -311,6 +329,18 @@ void TokriWindow::moveNearCursor()
 
 void TokriWindow::onShakeDetect()
 {
+    wakeUp();
+}
+
+void TokriWindow::beginDragWake()
+{
+    mDragWakeActive = true;
+    wakeUp();
+}
+
+void TokriWindow::endDragWake()
+{
+    mDragWakeActive = false;
     wakeUp();
 }
 
@@ -402,10 +432,15 @@ void TokriWindow::updateEdgeHover()
 
     const bool cursorOverWindow = frameGeometry().contains(QCursor::pos());
     if (mEdgeHidden && cursorOverWindow) {
+        mEdgeHideTimer->stop();
         revealFromScreenEdge();
-    } else if (!mEdgeHidden && !cursorOverWindow &&
-               qApp->applicationState() != Qt::ApplicationActive) {
-        dockAtScreenEdge();
+    } else if (!mEdgeHidden) {
+        if (cursorOverWindow ||
+            qApp->applicationState() == Qt::ApplicationActive) {
+            mEdgeHideTimer->stop();
+        } else if (!mEdgeHideTimer->isActive()) {
+            mEdgeHideTimer->start();
+        }
     }
 }
 
@@ -449,6 +484,7 @@ void TokriWindow::dockAtScreenEdge()
         return;
 
     mDockedAtEdge = true;
+    mEdgeHideTimer->stop();
     mEdgeHoverTimer->start();
     moveToScreenEdge(true, true);
 }

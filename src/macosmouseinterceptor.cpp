@@ -1,101 +1,71 @@
 #include "macosmouseinterceptor.h"
+#include <CoreGraphics/CoreGraphics.h>
+#include <QCursor>
 #include <QDateTime>
+#include <QTimer>
 
 static uint64_t nowMs() {
     return static_cast<uint64_t>(QDateTime::currentMSecsSinceEpoch());
 }
 
-CGEventRef MacOSMouseInterceptor::callback(CGEventTapProxy,
-                                           CGEventType type,
-                                           CGEventRef event,
-                                           void *userInfo) {
-    auto *self = static_cast<MacOSMouseInterceptor *>(userInfo);
-    self->handleEvent(type, event);
-    return event;
-}
-
 MacOSMouseInterceptor::MacOSMouseInterceptor(QObject *parent)
-    : QObject(parent) {}
+    : QObject(parent)
+    , mTimer(new QTimer(this))
+{
+    mTimer->setInterval(50);
+    connect(mTimer, &QTimer::timeout,
+            this, &MacOSMouseInterceptor::sampleMouse);
+}
 
 MacOSMouseInterceptor::~MacOSMouseInterceptor() {
     stop();
 }
 
 bool MacOSMouseInterceptor::start() {
-    CGEventMask mask =
-        CGEventMaskBit(kCGEventMouseMoved) |
-                       CGEventMaskBit(kCGEventLeftMouseDragged) |
-                       CGEventMaskBit(kCGEventRightMouseDragged) |
-                       CGEventMaskBit(kCGEventLeftMouseDown) |
-                       CGEventMaskBit(kCGEventLeftMouseUp);
-
-    eventTap = CGEventTapCreate(
-        kCGSessionEventTap,
-        kCGHeadInsertEventTap,
-        kCGEventTapOptionListenOnly,
-        mask,
-        &MacOSMouseInterceptor::callback,
-        this);
-
-    if (!eventTap) return false;
-
-    runLoopSource =
-        CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
-
-    CFRunLoopAddSource(CFRunLoopGetMain(),
-                       runLoopSource,
-                       kCFRunLoopCommonModes);
-    CGEventTapEnable(eventTap, true);
+    mTimer->start();
     return true;
 }
 
 void MacOSMouseInterceptor::stop() {
-    if (runLoopSource) {
-        CFRunLoopRemoveSource(CFRunLoopGetMain(),
-                              runLoopSource,
-                              kCFRunLoopCommonModes);
-        CFRelease(runLoopSource);
-        runLoopSource = nullptr;
-    }
-    if (eventTap) {
-        CFRelease(eventTap);
-        eventTap = nullptr;
-    }
+    mTimer->stop();
+    mLeftButtonPressed = false;
+    mShakeDetected = false;
+    mShakeDetector.reset();
 }
 
-void MacOSMouseInterceptor::handleEvent(CGEventType type, CGEventRef event) {
-    if (type == kCGEventLeftMouseDown) {
-        mLeftButtonClicked = true;
-        return;
-    }
-    if (type == kCGEventLeftMouseUp) {
-        mLeftButtonClicked = false;
+void MacOSMouseInterceptor::sampleMouse() {
+    const bool leftButtonPressed = CGEventSourceButtonState(
+        kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
+
+    if (!leftButtonPressed) {
+        const bool didShake = mShakeDetected;
+        if (mLeftButtonPressed)
+            mTimer->setInterval(50);
+        mLeftButtonPressed = false;
+        mShakeDetected = false;
         mShakeDetector.reset();
-        mHaveLastAbsoluteX = false;
+        if (didShake)
+            emit shakeEnded();
         return;
     }
 
-    if (!mLeftButtonClicked)
+    const double x = QCursor::pos().x();
+    if (!mLeftButtonPressed) {
+        mLeftButtonPressed = true;
+        mShakeDetected = false;
+        mLastAbsoluteX = x;
+        mTimer->setInterval(16);
         return;
-
-    if (type != kCGEventMouseMoved &&
-        type != kCGEventLeftMouseDragged &&
-        type != kCGEventRightMouseDragged)
-        return;
-
-    CGPoint p = CGEventGetLocation(event);
-
-    int dx = 0;
-    if (mHaveLastAbsoluteX) {
-        dx = static_cast<int>(p.x - mLastAbsoluteX);
     }
-    mLastAbsoluteX = p.x;
-    mHaveLastAbsoluteX = true;
+
+    const int dx = static_cast<int>(x - mLastAbsoluteX);
+    mLastAbsoluteX = x;
 
     if (dx == 0)
         return;
 
-    if (mShakeDetector.feed(dx, nowMs())) {
+    if (!mShakeDetected && mShakeDetector.feed(dx, nowMs())) {
+        mShakeDetected = true;
         emit shakeDetected();
     }
 }

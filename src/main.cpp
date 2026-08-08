@@ -256,7 +256,14 @@ int main(int argc, char *argv[])
         interceptor,
         &MacOSMouseInterceptor::shakeDetected,
         &tokriWindow,
-        &TokriWindow::wakeUp
+        &TokriWindow::beginDragWake
+        );
+
+    QObject::connect(
+        interceptor,
+        &MacOSMouseInterceptor::shakeEnded,
+        &tokriWindow,
+        &TokriWindow::endDragWake
         );
 
     interceptor->start();
