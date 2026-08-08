@@ -10,6 +10,9 @@
 #include <QMimeData>
 #include <QPainter>
 
+class QEnterEvent;
+class QPropertyAnimation;
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class TokriWindow;
@@ -26,22 +29,39 @@ public:
     Ui::TokriWindow* uiHandle();
     void sleep();
     void wakeUp();
+    bool canUndoDelete() const;
 
 public slots:
     void onShakeDetect();
+    void previewSelectedItem();
+    void deleteSelectedItems();
+    void undoLastDelete();
+
+signals:
+    void undoDeleteAvailabilityChanged(bool available);
 
 private:
     Ui::TokriWindow *ui;
     bool mDropping = false;
+    bool mDockedAtEdge = false;
+    bool mEdgeHidden = false;
     CloseButton *mCloseButton;
+    QPropertyAnimation *mDockAnimation;
 
     void init();
     void moveNearCursor();
-    void paintEvent(QPaintEvent *);
-    void resizeEvent(QResizeEvent *e);
+    void paintEvent(QPaintEvent *) override;
+    void resizeEvent(QResizeEvent *e) override;
     void setDropping(bool status);
-    void showEvent(QShowEvent *e);
+    void showEvent(QShowEvent *e) override;
     void openItem(QString filePath);
     void renderCloseButton();
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+    bool basketHasItems() const;
+    QPoint screenEdgePosition(bool hidden) const;
+    void moveToScreenEdge(bool hidden, bool animated);
+    void dockAtScreenEdge();
+    void revealFromScreenEdge();
 };
 #endif // TOKRIWINDOW_H

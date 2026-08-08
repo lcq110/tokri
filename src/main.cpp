@@ -85,6 +85,18 @@ int main(int argc, char *argv[])
     tray->setToolTip("Tokri - Running");
     auto *menu = new QMenu();
     menu->addAction("Show", &tokriWindow, &TokriWindow::wakeUp);
+
+    auto *undoDeleteAction = new QAction("Undo Delete", &tokriWindow);
+    undoDeleteAction->setShortcut(QKeySequence::Undo);
+    undoDeleteAction->setEnabled(tokriWindow.canUndoDelete());
+    tokriWindow.addAction(undoDeleteAction);
+    menu->addAction(undoDeleteAction);
+    QObject::connect(undoDeleteAction, &QAction::triggered,
+                     &tokriWindow, &TokriWindow::undoLastDelete);
+    QObject::connect(&tokriWindow, &TokriWindow::undoDeleteAvailabilityChanged,
+                     undoDeleteAction, &QAction::setEnabled);
+
+    menu->addSeparator();
     menu->addAction("Quit", &a, &QCoreApplication::quit);
     menu->setPalette(a.palette());
     tray->setContextMenu(menu);
@@ -193,28 +205,8 @@ int main(int argc, char *argv[])
     th->start();
 
 
-    // FIXME - move this to dropaware fs model
-    DropAwareFileSystemModel::connect(
-        deleteAction,
-        &QAction::triggered,
-        tokriWindow.uiHandle()->listView,
-        [&tokriWindow](){
-            auto selectionModel = tokriWindow.uiHandle()->listView->selectionModel();
-            QModelIndexList indexes = selectionModel->selectedIndexes();
-            for (const QModelIndex &index : selectionModel->selectedIndexes()) {
-                if (!index.isValid())
-                    continue;
-
-                QFileInfo fi = index.data(QFileSystemModel::FileInfoRole).value<QFileInfo>();
-                const QString path = fi.filePath();
-
-                if (fi.isDir()) {
-                    QDir(path).removeRecursively();
-                } else {
-                    QFile(path).moveToTrash();
-                }
-            }
-        });
+    QObject::connect(deleteAction, &QAction::triggered,
+                     &tokriWindow, &TokriWindow::deleteSelectedItems);
 
 
     auto SleepShortcut = new QShortcut(QKeySequence("Escape"), &tokriWindow);
@@ -224,6 +216,13 @@ int main(int argc, char *argv[])
                      &QShortcut::activated,
                      &tokriWindow,
                      &TokriWindow::sleep);
+
+#ifdef Q_OS_MACOS
+    auto *previewShortcut = new QShortcut(QKeySequence(Qt::Key_Space), &tokriWindow);
+    previewShortcut->setContext(Qt::WindowShortcut);
+    QObject::connect(previewShortcut, &QShortcut::activated,
+                     &tokriWindow, &TokriWindow::previewSelectedItem);
+#endif
 
 
 #ifdef Q_OS_LINUX
