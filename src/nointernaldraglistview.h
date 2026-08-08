@@ -5,13 +5,16 @@
 #include <QObject>
 #include <QPainter>
 
+class QTimer;
+
 class NoInternalDragListView : public QListView
 {
     Q_OBJECT
 public:
-    using QListView::QListView;
+    explicit NoInternalDragListView(QWidget *parent = nullptr);
 
-    NoInternalDragListView();
+public slots:
+    void showCopyFinished();
 
 protected:
     void dragEnterEvent(QDragEnterEvent *e) override;
@@ -21,6 +24,12 @@ protected:
     void paintEvent(QPaintEvent *e) override;
 signals:
     void dropping(bool status);
+
+private:
+    QString mDropFeedback;
+    QTimer *mFeedbackTimer;
+
+    void showFeedback(const QString &message, int duration = 0);
 };
 
 #endif // NOINTERNALDRAGLISTVIEW_H

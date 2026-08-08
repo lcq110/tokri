@@ -19,6 +19,9 @@ void MacWindowLevel::makeAlwaysOnTop(QWindow *w)
 
     [nswin setLevel:NSStatusWindowLevel];
     [nswin setHidesOnDeactivate:NO];
+    [nswin setCollectionBehavior:(nswin.collectionBehavior
+                                   | NSWindowCollectionBehaviorCanJoinAllSpaces
+                                   | NSWindowCollectionBehaviorFullScreenAuxiliary)];
 }
 
 void MacWindowLevel::hideFromDock()

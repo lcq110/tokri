@@ -49,7 +49,13 @@ void CopyWorker::copyDirectory(const QString &src) {
         QDir(dstFinal).removeRecursively();
     QString tmpDirName = QFileInfo(dst).fileName();
     QDir tmpDir = QFileInfo(dstFinal).dir();
-    tmpDir.rename(tmpDirName, QFileInfo(dstFinal).fileName());
+    if (!tmpDir.rename(tmpDirName, QFileInfo(dstFinal).fileName())) {
+        emit copyFailed(dstFinal);
+        return;
+    }
+    emit copySuccess(dstFinal);
+#else
+    emit copySuccess(dst);
 #endif
 }
 
@@ -60,7 +66,9 @@ void CopyWorker::copyFile(const QString &filePath)
     bool copied = file.copy(FilePathProvider::nameFromPath(filePath));
     if (copied == false){
         emit copyFailed(filePath);
+        return;
     }
+    emit copySuccess(FilePathProvider::nameFromPath(filePath));
 #endif
 
 #ifdef Q_OS_MAC
@@ -75,6 +83,7 @@ void CopyWorker::copyFile(const QString &filePath)
         emit copyFailed(filePath);
         return;
     }
+    emit copySuccess(dst);
 #endif
 }
 

@@ -41,7 +41,6 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <QAction>
-#include <QTimer>
 
 int main(int argc, char *argv[])
 {
@@ -112,7 +111,15 @@ int main(int argc, char *argv[])
 
 
     QAction *deleteAction = new QAction(&tokriWindow);
+#ifdef Q_OS_MAC
+    deleteAction->setShortcuts({
+        QKeySequence::Delete,
+        QKeySequence(Qt::CTRL | Qt::Key_Backspace),
+        QKeySequence(Qt::CTRL | Qt::Key_Delete)
+    });
+#else
     deleteAction->setShortcut(QKeySequence::Delete);
+#endif
     tokriWindow.addAction(deleteAction);
 
     // View & Models
@@ -174,28 +181,10 @@ int main(int argc, char *argv[])
         );
 
 
-    QTimer *reloadDirectoryDebounce = new QTimer(&tokriWindow);
-    reloadDirectoryDebounce->setSingleShot(true);
-
-    bool reset = true;
-
     QObject::connect(worker, &CopyWorker::copySuccess,
-                     reloadDirectoryDebounce,
-                     [&reloadDirectoryDebounce, &reset] {
-                         reloadDirectoryDebounce->setInterval(reset ? 500 : 3000);
-                         reset = false;
-                         reloadDirectoryDebounce->start();
-                     },
+                     tokriWindow.uiHandle()->listView,
+                     &NoInternalDragListView::showCopyFinished,
                      Qt::QueuedConnection);
-
-    QObject::connect(reloadDirectoryDebounce, &QTimer::timeout,
-                     fsModel,
-                     [&reset, &fsModel] {
-                         reset = true;
-                         const QString root = fsModel->rootPath();
-                         fsModel->setRootPath(QString());
-                         fsModel->setRootPath(root);
-                     });
 
 
     QThread* th = new QThread;
