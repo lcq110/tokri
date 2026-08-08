@@ -103,7 +103,8 @@ int main(int argc, char *argv[])
 
     QObject::connect(tray, &QSystemTrayIcon::activated,
                      [&](QSystemTrayIcon::ActivationReason r) {
-                         if (r == QSystemTrayIcon::DoubleClick)
+                         if (r == QSystemTrayIcon::Trigger ||
+                             r == QSystemTrayIcon::DoubleClick)
                              tokriWindow.wakeUp();
                      });
 

@@ -43,9 +43,8 @@ TokriWindow::TokriWindow(QWidget *parent)
             this, [this](Qt::ApplicationState state) {
                 if (state == Qt::ApplicationInactive) {
                     dockAtScreenEdge();
-                } else if (state == Qt::ApplicationActive && mDockedAtEdge) {
-                    revealFromScreenEdge();
-                    mDockedAtEdge = false;
+                } else if (state == Qt::ApplicationActive) {
+                    wakeUp();
                 }
             });
 
