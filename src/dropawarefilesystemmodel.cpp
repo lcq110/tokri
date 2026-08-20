@@ -1,6 +1,5 @@
 #include "dropawarefilesystemmodel.h"
 
-#include <QApplication>
 #include <QBuffer>
 #include <QImageReader>
 #include <QUuid>
@@ -166,7 +165,5 @@ QMimeData* DropAwareFileSystemModel::mimeData(const QModelIndexList &indexes) co
 }
 
 Qt::DropActions DropAwareFileSystemModel::supportedDragActions() const {
-    return (QApplication::keyboardModifiers() & Qt::ControlModifier)
-               ? Qt::CopyAction
-               : Qt::MoveAction;
+    return Qt::CopyAction;
 }
